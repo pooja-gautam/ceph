@@ -15,8 +15,8 @@ import { NotificationService } from '../../../../shared/services/notification.se
 })
 export class OsdScrubModalComponent implements OnInit {
   deep: boolean;
-  selected = [];
   scrubForm: FormGroup;
+  selected = [];
 
   constructor(
     public bsModalRef: BsModalRef,
@@ -30,25 +30,24 @@ export class OsdScrubModalComponent implements OnInit {
   }
 
   scrub() {
-    const id = this.selected[0].id;
+    for (const id of this.selected) {
+      this.osdService.scrub(id, this.deep).subscribe(
+        () => {
+          const operation = this.deep ? 'Deep scrub' : 'Scrub';
 
-    this.osdService.scrub(id, this.deep).subscribe(
-      () => {
-        const operation = this.deep ? 'Deep scrub' : 'Scrub';
-
-        this.notificationService.show(
-          NotificationType.success,
-          this.i18n('{{operation}} was initialized in the following OSD: {{id}}', {
-            operation: operation,
-            id: id
-          })
-        );
-
-        this.bsModalRef.hide();
-      },
-      () => {
-        this.bsModalRef.hide();
-      }
-    );
+          this.notificationService.show(
+            NotificationType.success,
+            this.i18n('{{operation}} was initialized in the following OSD(s): {{id}}', {
+              operation: operation,
+              id: this.selected.toString()
+            })
+          );
+          this.bsModalRef.hide();
+        },
+        () => {
+          this.bsModalRef.hide();
+        }
+      );
+    }
   }
 }

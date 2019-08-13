@@ -51,8 +51,8 @@ export class OsdListComponent implements OnInit {
   clusterWideActions: CdTableAction[];
   icons = Icons;
 
-  osds = [];
   selection = new CdTableSelection();
+  osds = [];
 
   protected static collectStates(osd) {
     return [osd['in'] ? 'in' : 'out', osd['up'] ? 'up' : 'down'];
@@ -86,7 +86,7 @@ export class OsdListComponent implements OnInit {
         name: this.actionLabels.REWEIGHT,
         permission: 'update',
         click: () => this.reweight(),
-        disable: () => !this.hasOsdSelected,
+        disable: () => !this.hasOsdSelected || !this.selection.hasSingleSelection,
         icon: Icons.reweight
       },
       {
@@ -177,6 +177,7 @@ export class OsdListComponent implements OnInit {
       }
     ];
     this.columns = [
+      { prop: 'selected', name: '', checkboxable: true, width: 30, canAutoResize: false},
       { prop: 'host.name', name: this.i18n('Host') },
       { prop: 'id', name: this.i18n('ID'), cellTransformation: CellTemplate.bold },
       { prop: 'collectedStates', name: this.i18n('Status'), cellTemplate: this.statusColor },
@@ -207,15 +208,17 @@ export class OsdListComponent implements OnInit {
   }
 
   get hasOsdSelected() {
+    const validOsds = []
     if (this.selection.hasSelection) {
-      const osdId = this.selection.first().id;
-      const osd = this.osds.filter((o) => o.id === osdId).pop();
-      return !!osd;
+      for (let osdId of this.selection.getIds()){
+        validOsds.push(this.osds.filter((o) => o.id === osdId).pop());
+        }
+      return !!validOsds;
     }
     return false;
   }
-
-  updateSelection(selection: CdTableSelection) {
+  
+  updateSelection(selection: CdTableSelection) { 
     this.selection = selection;
   }
 
@@ -227,26 +230,37 @@ export class OsdListComponent implements OnInit {
     if (!this.hasOsdSelected) {
       return true;
     }
+    
+    const validOsds = []
+    if (this.selection.hasSelection) {
+      for (let osdId of this.selection.getIds()){
+        validOsds.push(this.osds.filter((o) => o.id === osdId).pop());
+        }
+	  }
+  
+  
+    if (!this.hasOsdSelected) {
+      return true;
+    }
 
-    const osdId = this.selection.first().id;
-    const osd = this.osds.filter((o) => o.id === osdId).pop();
-
-    if (!osd) {
+    if (!validOsds) {
       // `osd` is undefined if the selected OSD has been removed.
       return true;
     }
 
+
     switch (state) {
       case 'in':
-        return osd.in === 1;
+        return validOsds.some(osd => osd.in === 1);
       case 'out':
-        return osd.in !== 1;
+        return validOsds.some(osd => osd.in !== 1);
       case 'down':
-        return osd.up !== 1;
+        return validOsds.some(osd => osd.up !== 1);
       case 'up':
-        return osd.up === 1;
+        return validOsds.some(osd => osd.up === 1);
     }
   }
+  
 
   getOsdList() {
     this.osdService.getList().subscribe((data: any[]) => {
@@ -267,11 +281,12 @@ export class OsdListComponent implements OnInit {
     }
 
     const initialState = {
-      selected: this.tableComponent.selection.selected,
+      selected: this.tableComponent.selection.getIds(),
       deep: deep
     };
 
     this.bsModalRef = this.modalService.show(OsdScrubModalComponent, { initialState });
+
   }
 
   configureFlagsAction() {
@@ -288,9 +303,11 @@ export class OsdListComponent implements OnInit {
           markActionDescription: markAction
         },
         onSubmit: () => {
-          onSubmit
-            .call(this.osdService, this.selection.first().id)
-            .subscribe(() => this.bsModalRef.hide());
+          for (let id of this.selection.getIds()){
+            onSubmit
+              .call(this.osdService, id)
+              .subscribe(() => this.bsModalRef.hide());
+        }
         }
       }
     });
@@ -312,7 +329,7 @@ export class OsdListComponent implements OnInit {
     templateItemDescription: string,
     action: (id: number) => Observable<any>
   ): void {
-    this.osdService.safeToDestroy(this.selection.first().id).subscribe((result) => {
+    this.osdService.safeToDestroy(this.selection.getIds().toString()).subscribe((result) => {
       const modalRef = this.modalService.show(CriticalConfirmationModalComponent, {
         initialState: {
           actionDescription: actionDescription,
@@ -323,9 +340,11 @@ export class OsdListComponent implements OnInit {
             actionDescription: templateItemDescription
           },
           submitAction: () => {
-            action
-              .call(this.osdService, this.selection.first().id)
-              .subscribe(() => modalRef.hide());
+            for (let id of this.selection.getIds()){
+              action
+                .call(this.osdService, id)
+                .subscribe(() => modalRef.hide());
+          }
           }
         }
       });
